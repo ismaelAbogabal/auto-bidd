@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -38,12 +39,15 @@ func New(db *gorm.DB, renderer *views.Renderer, aiService *services.AIService) h
 	analyticsService := services.NewAnalyticsService(db)
 	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService, renderer)
 
+	// Auth rate limiter (5 attempts per minute)
+	authLimiter := middleware.RateLimit(5, time.Minute)
+
 	// Public routes
 	r.Group(func(r chi.Router) {
 		r.Get("/login", authHandler.LoginPage)
 		r.Get("/register", authHandler.RegisterPage)
-		r.Post("/auth/register", authHandler.Register)
-		r.Post("/auth/login", authHandler.Login)
+		r.With(authLimiter).Post("/auth/register", authHandler.Register)
+		r.With(authLimiter).Post("/auth/login", authHandler.Login)
 		r.Post("/auth/logout", authHandler.Logout)
 	})
 
@@ -65,9 +69,9 @@ func New(db *gorm.DB, renderer *views.Renderer, aiService *services.AIService) h
 		r.Get("/bids", bidsHandler.ListPage)
 		r.Get("/bids/new", bidsHandler.NewPage)
 		r.Get("/bids/{id}", bidsHandler.DetailPage)
-		r.Post("/api/bids", bidsHandler.Create)
-		r.Get("/api/bids/{id}/generate", bidsHandler.StreamGenerate)
-		r.Get("/api/bids/{id}/refine", bidsHandler.StreamRefine)
+		r.With(middleware.AIRateLimit()).Post("/api/bids", bidsHandler.Create)
+		r.With(middleware.AIRateLimit()).Get("/api/bids/{id}/generate", bidsHandler.StreamGenerate)
+		r.With(middleware.AIRateLimit()).Get("/api/bids/{id}/refine", bidsHandler.StreamRefine)
 		r.Put("/api/bids/{id}", bidsHandler.Update)
 		r.Patch("/api/bids/{id}/status", bidsHandler.UpdateStatus)
 		r.Delete("/api/bids/{id}", bidsHandler.Delete)

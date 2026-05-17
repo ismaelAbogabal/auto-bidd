@@ -82,9 +82,9 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Error handling (flash messages) | [ ] | |
-| Form validation (server + client) | [ ] | |
+| Error handling (flash messages) | [x] | Auto-dismiss alerts with icons, dismissible |
+| Form validation (server + client) | [x] | Client-side password match, min length, disabled submit |
 | Loading states (HTMX indicators) | [x] | Bid generation + chat refinement |
 | Empty states | [x] | Bid list + templates |
-| Responsive design | [ ] | |
-| Rate limiting | [ ] | |
+| Responsive design | [x] | Collapsible sidebar, mobile header, responsive grids |
+| Rate limiting | [x] | Auth: 5/min, AI endpoints: 10/min |

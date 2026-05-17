@@ -3,7 +3,9 @@
 {{define "content"}}
 <div id="alert-area"></div>
 
-<form hx-post="/auth/register" hx-target="#alert-area" hx-swap="innerHTML" class="mt-8 space-y-6">
+<form hx-post="/auth/register" hx-target="#alert-area" hx-swap="innerHTML" class="mt-8 space-y-6"
+    x-data="{ password: '', confirm: '' }"
+    @submit="if(password !== confirm) { $event.preventDefault(); document.getElementById('alert-area').innerHTML = '<div class=\'rounded-md bg-red-50 p-4\'><p class=\'text-sm text-red-700\'>Passwords do not match</p></div>'; }">
     <div class="space-y-4">
         <div>
             <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
@@ -12,18 +14,21 @@
         </div>
         <div>
             <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-            <input id="password" name="password" type="password" required minlength="8"
+            <input id="password" name="password" type="password" required minlength="8" x-model="password"
                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            <p class="mt-1 text-xs text-gray-400">At least 8 characters</p>
         </div>
         <div>
             <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-            <input id="confirm_password" name="confirm_password" type="password" required minlength="8"
-                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            <input id="confirm_password" name="confirm_password" type="password" required minlength="8" x-model="confirm"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                :class="confirm && confirm !== password ? 'border-red-300' : ''">
+            <p x-show="confirm && confirm !== password" class="mt-1 text-xs text-red-500">Passwords do not match</p>
         </div>
     </div>
 
-    <button type="submit"
-        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+    <button type="submit" :disabled="password.length < 8 || confirm !== password"
+        class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
         Create account
     </button>
 </form>
