@@ -1,0 +1,30 @@
+{{define "portfolio_item"}}
+<div id="portfolio-{{.ID}}" class="flex items-start justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-900">{{.Title}}</span>
+            {{if .URL}}
+            <a href="{{.URL}}" target="_blank" class="text-xs text-indigo-500 hover:underline">link</a>
+            {{end}}
+        </div>
+        {{if .Description}}
+        <p class="mt-1 text-sm text-gray-600 line-clamp-2">{{.Description}}</p>
+        {{end}}
+        {{if .TechStack}}
+        <div class="mt-1 flex flex-wrap gap-1">
+            {{range .TechStack}}
+            <span class="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded">{{.}}</span>
+            {{end}}
+        </div>
+        {{end}}
+        {{if .Outcome}}
+        <p class="mt-1 text-xs text-gray-500">{{.Outcome}}</p>
+        {{end}}
+    </div>
+    <button hx-delete="/api/profile/portfolio/{{.ID}}"
+            hx-target="#portfolio-{{.ID}}"
+            hx-swap="delete"
+            hx-confirm="Remove this portfolio item?"
+            class="ml-3 text-gray-400 hover:text-red-500 text-lg leading-none">&times;</button>
+</div>
+{{end}}

@@ -1,0 +1,177 @@
+{{define "title"}} — Profile{{end}}
+{{define "content"}}
+<div class="max-w-4xl mx-auto px-6 py-8 space-y-8">
+    <h1 class="text-2xl font-bold text-gray-900">Profile Settings</h1>
+
+    <!-- Basic Info -->
+    <section class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Basic Info</h2>
+        <div id="profile-alert"></div>
+        <form hx-put="/api/profile" hx-target="#profile-alert" hx-swap="innerHTML" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Full Name</label>
+                    <input type="text" name="full_name" value="{{.Profile.FullName}}"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Professional Title</label>
+                    <input type="text" name="title" value="{{.Profile.Title}}"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Hourly Rate ($)</label>
+                <input type="number" name="hourly_rate" value="{{.Profile.HourlyRate}}" step="0.01" min="0"
+                    class="mt-1 block w-48 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+
+            <!-- Skills Tag Input -->
+            <div x-data="{ skills: {{json .Profile.Skills}}, newSkill: '' }">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Skills</label>
+                <div class="flex flex-wrap gap-2 p-2 border border-gray-300 rounded-md min-h-[42px]">
+                    <template x-for="(skill, i) in skills" :key="i">
+                        <span class="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 text-sm rounded">
+                            <span x-text="skill"></span>
+                            <button type="button" @click="skills.splice(i, 1)" class="text-indigo-500 hover:text-indigo-700">&times;</button>
+                        </span>
+                    </template>
+                    <input type="text" x-model="newSkill"
+                        @keydown.enter.prevent="if(newSkill.trim() && !skills.includes(newSkill.trim())) { skills.push(newSkill.trim()); newSkill='' }"
+                        @keydown.comma.prevent="if(newSkill.trim() && !skills.includes(newSkill.trim())) { skills.push(newSkill.trim()); newSkill='' }"
+                        placeholder="Type and press Enter..."
+                        class="flex-1 min-w-[120px] border-none outline-none text-sm p-1">
+                </div>
+                <input type="hidden" name="skills" :value="JSON.stringify(skills)">
+            </div>
+
+            <button type="submit"
+                class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                Save Profile
+            </button>
+        </form>
+    </section>
+
+    <!-- Tone Examples -->
+    <section class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Tone Examples</h2>
+        <p class="text-sm text-gray-500 mb-4">Provide examples of how you write proposals. The AI will match your voice.</p>
+
+        <div id="tone-list" class="space-y-3 mb-4">
+            {{range .Tones}}
+            {{template "tone_item" .}}
+            {{end}}
+        </div>
+
+        <div id="tone-alert"></div>
+
+        <details class="border border-gray-200 rounded-md">
+            <summary class="px-4 py-2 cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-700">+ Add tone example</summary>
+            <form hx-post="/api/profile/tone" hx-target="#tone-list" hx-swap="beforeend"
+                  class="p-4 space-y-3 border-t border-gray-200"
+                  x-data="{ submitted: false }"
+                  @htmx:after-request="if($event.detail.successful) { $el.reset(); }">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Label</label>
+                    <input type="text" name="label" placeholder="e.g., Casual intro"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Context</label>
+                    <input type="text" name="context" placeholder="e.g., For small projects under $1k"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Example Text</label>
+                    <textarea name="content" rows="4" placeholder="Paste a sample of how you write proposals..."
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm"></textarea>
+                </div>
+                <button type="submit"
+                    class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700">
+                    Add Example
+                </button>
+            </form>
+        </details>
+    </section>
+
+    <!-- Portfolio -->
+    <section class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Portfolio</h2>
+        <p class="text-sm text-gray-500 mb-4">Past projects the AI can reference to demonstrate your experience.</p>
+
+        <div id="portfolio-list" class="space-y-3 mb-4">
+            {{range .Portfolio}}
+            {{template "portfolio_item" .}}
+            {{end}}
+        </div>
+
+        <div id="portfolio-alert"></div>
+
+        <details class="border border-gray-200 rounded-md">
+            <summary class="px-4 py-2 cursor-pointer text-sm font-medium text-indigo-600 hover:text-indigo-700">+ Add portfolio item</summary>
+            <form hx-post="/api/profile/portfolio" hx-target="#portfolio-list" hx-swap="beforeend"
+                  class="p-4 space-y-3 border-t border-gray-200"
+                  @htmx:after-request="if($event.detail.successful) { $el.reset(); }">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Project Title</label>
+                        <input type="text" name="title" required
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">URL (optional)</label>
+                        <input type="url" name="url"
+                            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea name="description" rows="3"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm"></textarea>
+                </div>
+                <div x-data="{ techs: [], newTech: '' }">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tech Stack</label>
+                    <div class="flex flex-wrap gap-2 p-2 border border-gray-300 rounded-md min-h-[42px]">
+                        <template x-for="(tech, i) in techs" :key="i">
+                            <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 text-sm rounded">
+                                <span x-text="tech"></span>
+                                <button type="button" @click="techs.splice(i, 1)" class="text-green-500 hover:text-green-700">&times;</button>
+                            </span>
+                        </template>
+                        <input type="text" x-model="newTech"
+                            @keydown.enter.prevent="if(newTech.trim()) { techs.push(newTech.trim()); newTech='' }"
+                            placeholder="Type and press Enter..."
+                            class="flex-1 min-w-[120px] border-none outline-none text-sm p-1">
+                    </div>
+                    <input type="hidden" name="tech_stack" :value="JSON.stringify(techs)">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Outcome / Results</label>
+                    <textarea name="outcome" rows="2"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm"></textarea>
+                </div>
+                <button type="submit"
+                    class="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700">
+                    Add Project
+                </button>
+            </form>
+        </details>
+    </section>
+
+    <!-- AI Instructions -->
+    <section class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">AI Instructions</h2>
+        <p class="text-sm text-gray-500 mb-4">Custom rules for the AI when writing your proposals.</p>
+        <div id="instructions-alert"></div>
+        <form hx-put="/api/profile/instructions" hx-target="#instructions-alert" hx-swap="innerHTML" class="space-y-4">
+            <textarea name="ai_instructions" rows="6"
+                placeholder="e.g., Always mention my 5-year React experience&#10;Never use the word 'synergy'&#10;Keep cover letters under 200 words"
+                class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">{{.Profile.AIInstructions}}</textarea>
+            <button type="submit"
+                class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                Save Instructions
+            </button>
+        </form>
+    </section>
+</div>
+{{end}}

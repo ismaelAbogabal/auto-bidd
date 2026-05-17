@@ -1,0 +1,13 @@
+{{define "chat_messages"}}
+<div id="chat-messages" class="space-y-3 mb-4 max-h-64 overflow-y-auto">
+    {{range .Messages}}
+    {{if eq .Role "user"}}
+    <div class="flex justify-end">
+        <div class="bg-indigo-50 rounded-lg px-3 py-2 max-w-[80%]">
+            <p class="text-sm text-gray-800">{{.Content}}</p>
+        </div>
+    </div>
+    {{end}}
+    {{end}}
+</div>
+{{end}}

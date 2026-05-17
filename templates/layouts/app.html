@@ -1,0 +1,8 @@
+{{define "body"}}
+<div class="flex h-screen">
+    {{template "sidebar" .}}
+    <main class="flex-1 overflow-y-auto">
+        {{block "content" .}}{{end}}
+    </main>
+</div>
+{{end}}

@@ -1,0 +1,32 @@
+{{define "sidebar"}}
+<aside class="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <div class="p-6">
+        <h1 class="text-xl font-bold text-gray-900">Auto-Bidder</h1>
+    </div>
+    <nav class="flex-1 px-4 space-y-1">
+        <a href="/" class="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+            Dashboard
+        </a>
+        <a href="/bids" class="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+            Bids
+        </a>
+        <a href="/bids/new" class="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+            New Bid
+        </a>
+        <a href="/templates" class="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+            Templates
+        </a>
+        <a href="/analytics" class="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+            Analytics
+        </a>
+        <a href="/profile" class="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-700 hover:bg-gray-100">
+            Profile
+        </a>
+    </nav>
+    <div class="p-4 border-t border-gray-200">
+        <form hx-post="/auth/logout" hx-swap="none">
+            <button type="submit" class="text-sm text-gray-500 hover:text-gray-700">Logout</button>
+        </form>
+    </div>
+</aside>
+{{end}}

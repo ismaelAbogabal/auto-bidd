@@ -1,0 +1,18 @@
+{{define "tone_item"}}
+<div id="tone-{{.ID}}" class="flex items-start justify-between p-3 bg-gray-50 rounded-md border border-gray-200">
+    <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-gray-900">{{.Label}}</span>
+            {{if .Context}}
+            <span class="text-xs text-gray-500">({{.Context}})</span>
+            {{end}}
+        </div>
+        <p class="mt-1 text-sm text-gray-600 line-clamp-2">{{.Content}}</p>
+    </div>
+    <button hx-delete="/api/profile/tone/{{.ID}}"
+            hx-target="#tone-{{.ID}}"
+            hx-swap="delete"
+            hx-confirm="Remove this tone example?"
+            class="ml-3 text-gray-400 hover:text-red-500 text-lg leading-none">&times;</button>
+</div>
+{{end}}

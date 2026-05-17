@@ -1,0 +1,83 @@
+{{define "title"}} — New Bid{{end}}
+{{define "content"}}
+<div class="max-w-4xl mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">New Bid</h1>
+
+    <div id="bid-alert"></div>
+
+    <form hx-post="/api/bids"
+          hx-target="#bid-alert"
+          hx-swap="innerHTML"
+          hx-indicator="#generating"
+          class="bg-white rounded-lg shadow p-6 space-y-5">
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Job Title</label>
+            <input type="text" name="job_title" required
+                placeholder="e.g., Build a React dashboard with real-time data"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Job Description</label>
+            <textarea name="job_description" rows="8" required
+                placeholder="Paste the full job description here..."
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Client Questions (one per line)</label>
+            <textarea name="questions" rows="3"
+                placeholder="What is your experience with...&#10;How would you approach..."
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Budget Min ($)</label>
+                <input type="number" name="budget_min" step="1" min="0"
+                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Budget Max ($)</label>
+                <input type="number" name="budget_max" step="1" min="0"
+                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Platform</label>
+                <select name="platform"
+                    class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="">Generic</option>
+                    <option value="upwork">Upwork</option>
+                    <option value="freelancer">Freelancer</option>
+                    <option value="toptal">Toptal</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+        </div>
+
+        {{if .Templates}}
+        <div>
+            <label class="block text-sm font-medium text-gray-700">Use Template (optional)</label>
+            <select name="template_id"
+                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                <option value="">None</option>
+                {{range .Templates}}
+                <option value="{{.ID}}">{{.Name}} ({{.WinCount}} wins)</option>
+                {{end}}
+            </select>
+        </div>
+        {{end}}
+
+        <div class="flex items-center gap-3">
+            <button type="submit"
+                class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700">
+                Generate Bid
+            </button>
+            <div id="generating" class="htmx-indicator text-sm text-gray-500">
+                Generating with AI... this may take a moment
+            </div>
+        </div>
+    </form>
+</div>
+{{end}}

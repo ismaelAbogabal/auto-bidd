@@ -1,0 +1,22 @@
+{{define "title"}} — Dashboard{{end}}
+{{define "content"}}
+<div class="max-w-6xl mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+    <p class="mt-2 text-gray-600">Welcome back, {{if .User}}{{.User.Email}}{{end}}</p>
+
+    <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <a href="/bids/new" class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition">
+            <h3 class="text-lg font-semibold text-indigo-600">New Bid</h3>
+            <p class="mt-1 text-sm text-gray-500">Generate an AI-powered proposal</p>
+        </a>
+        <a href="/bids" class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition">
+            <h3 class="text-lg font-semibold text-indigo-600">My Bids</h3>
+            <p class="mt-1 text-sm text-gray-500">View and manage your bids</p>
+        </a>
+        <a href="/profile" class="block p-6 bg-white rounded-lg shadow hover:shadow-md transition">
+            <h3 class="text-lg font-semibold text-indigo-600">Profile</h3>
+            <p class="mt-1 text-sm text-gray-500">Set your tone and portfolio</p>
+        </a>
+    </div>
+</div>
+{{end}}

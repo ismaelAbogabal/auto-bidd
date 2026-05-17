@@ -1,0 +1,11 @@
+{{define "alert"}}
+{{if eq .Type "error"}}
+<div class="rounded-md bg-red-50 p-4">
+    <p class="text-sm text-red-700">{{.Message}}</p>
+</div>
+{{else if eq .Type "success"}}
+<div class="rounded-md bg-green-50 p-4">
+    <p class="text-sm text-green-700">{{.Message}}</p>
+</div>
+{{end}}
+{{end}}

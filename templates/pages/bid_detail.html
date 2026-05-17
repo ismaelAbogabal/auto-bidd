@@ -1,0 +1,182 @@
+{{define "title"}} — {{.Bid.JobTitle}}{{end}}
+{{define "content"}}
+<div class="max-w-6xl mx-auto px-6 py-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">{{.Bid.JobTitle}}</h1>
+            <p class="text-sm text-gray-500 mt-1">
+                {{if .Bid.Platform}}{{.Bid.Platform}} · {{end}}
+                Created {{.Bid.CreatedAt.Format "Jan 2, 2006"}}
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="px-3 py-1 text-sm rounded
+                {{if eq (printf "%s" .Bid.Status) "draft"}}bg-gray-100 text-gray-600
+                {{else if eq (printf "%s" .Bid.Status) "submitted"}}bg-blue-100 text-blue-700
+                {{else if eq (printf "%s" .Bid.Status) "won"}}bg-green-100 text-green-700
+                {{else if eq (printf "%s" .Bid.Status) "lost"}}bg-red-100 text-red-700
+                {{else}}bg-yellow-100 text-yellow-700{{end}}">
+                {{.Bid.Status}}
+            </span>
+        </div>
+    </div>
+
+    <div id="bid-detail-alert"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main Content (2/3) -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- Cover Letter -->
+            <div id="bid-output" class="bg-white rounded-lg shadow p-6" x-data="{ editing: false }">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-lg font-semibold text-gray-900">Cover Letter</h2>
+                    <button @click="editing = !editing"
+                        class="text-sm text-indigo-600 hover:text-indigo-700"
+                        x-text="editing ? 'Cancel' : 'Edit'"></button>
+                </div>
+
+                <!-- View mode -->
+                <div x-show="!editing">
+                    <div class="prose prose-sm max-w-none text-gray-700 whitespace-pre-wrap">{{.Bid.CoverLetter}}</div>
+                </div>
+
+                <!-- Edit mode -->
+                <div x-show="editing">
+                    <form hx-put="/api/bids/{{.Bid.ID}}" hx-target="#bid-output" hx-swap="outerHTML">
+                        <textarea name="cover_letter" rows="10"
+                            class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">{{.Bid.CoverLetter}}</textarea>
+                        <input type="hidden" name="estimated_hours" value="{{.Bid.EstimatedHours}}">
+                        <input type="hidden" name="hourly_rate" value="{{printf "%.2f" .Bid.HourlyRate}}">
+                        <button type="submit"
+                            class="mt-3 px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700">
+                            Save Changes
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Q&A Answers -->
+            {{if .Bid.QAAnswers}}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Q&A Answers</h2>
+                <div class="space-y-4">
+                    {{range .Bid.QAAnswers}}
+                    <div>
+                        <p class="text-sm font-medium text-gray-700">Q: {{.Question}}</p>
+                        <p class="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{{.Answer}}</p>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+            {{end}}
+
+            <!-- Chat Refinement -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Refine with AI</h2>
+
+                <div id="chat-messages" class="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                    {{range .Messages}}
+                    {{if eq .Role "user"}}
+                    <div class="flex justify-end">
+                        <div class="bg-indigo-50 rounded-lg px-3 py-2 max-w-[80%]">
+                            <p class="text-sm text-gray-800">{{.Content}}</p>
+                        </div>
+                    </div>
+                    {{end}}
+                    {{end}}
+                </div>
+
+                <form hx-post="/api/bids/{{.Bid.ID}}/chat"
+                      hx-target="#bid-detail-alert"
+                      hx-swap="innerHTML"
+                      hx-indicator="#refine-loading"
+                      class="flex gap-2"
+                      x-data
+                      @htmx:after-request="if($event.detail.successful) { $el.reset(); window.location.reload(); }">
+                    <input type="text" name="message"
+                        placeholder="e.g., Make it shorter, add more React experience..."
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <button type="submit"
+                        class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700">
+                        Send
+                    </button>
+                </form>
+                <div id="refine-loading" class="htmx-indicator text-sm text-gray-500 mt-2">
+                    AI is refining...
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar (1/3) -->
+        <div class="space-y-6">
+            <!-- Pricing -->
+            <div class="bg-white rounded-lg shadow p-6" x-data="{ hours: {{.Bid.EstimatedHours}}, rate: {{printf "%.2f" .Bid.HourlyRate}} }">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Pricing</h2>
+                <div class="space-y-3">
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">Estimated Hours</span>
+                        <span class="font-medium" x-text="hours + 'h'"></span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">Hourly Rate</span>
+                        <span class="font-medium" x-text="'$' + rate"></span>
+                    </div>
+                    <div class="border-t pt-3 flex justify-between">
+                        <span class="font-medium text-gray-900">Total</span>
+                        <span class="font-bold text-lg text-indigo-600" x-text="'$' + (hours * rate).toLocaleString()"></span>
+                    </div>
+                </div>
+
+                {{if .Bid.JobBudgetMin}}
+                <div class="mt-3 pt-3 border-t text-xs text-gray-500">
+                    Client budget: ${{printf "%.0f" .Bid.JobBudgetMin}} - ${{printf "%.0f" .Bid.JobBudgetMax}}
+                </div>
+                {{end}}
+            </div>
+
+            <!-- Status Update -->
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Status</h2>
+                <form hx-patch="/api/bids/{{.Bid.ID}}/status"
+                      hx-target="#bid-detail-alert"
+                      hx-swap="innerHTML"
+                      class="space-y-3">
+                    <select name="status"
+                        class="block w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                        <option value="draft" {{if eq (printf "%s" .Bid.Status) "draft"}}selected{{end}}>Draft</option>
+                        <option value="submitted" {{if eq (printf "%s" .Bid.Status) "submitted"}}selected{{end}}>Submitted</option>
+                        <option value="won" {{if eq (printf "%s" .Bid.Status) "won"}}selected{{end}}>Won</option>
+                        <option value="lost" {{if eq (printf "%s" .Bid.Status) "lost"}}selected{{end}}>Lost</option>
+                        <option value="withdrawn" {{if eq (printf "%s" .Bid.Status) "withdrawn"}}selected{{end}}>Withdrawn</option>
+                    </select>
+                    <button type="submit"
+                        class="w-full px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
+                        Update Status
+                    </button>
+                </form>
+            </div>
+
+            <!-- Actions -->
+            <div class="bg-white rounded-lg shadow p-6 space-y-3">
+                <h2 class="text-lg font-semibold text-gray-900 mb-3">Actions</h2>
+                <button onclick="navigator.clipboard.writeText(document.querySelector('.prose').innerText)"
+                    class="w-full px-3 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200">
+                    Copy Cover Letter
+                </button>
+                <form hx-post="/api/bids/{{.Bid.ID}}/template" hx-target="#bid-detail-alert" hx-swap="innerHTML">
+                    <button type="submit"
+                        class="w-full px-3 py-2 bg-green-50 text-green-700 text-sm rounded-md hover:bg-green-100">
+                        Save as Template
+                    </button>
+                </form>
+                <button hx-delete="/api/bids/{{.Bid.ID}}"
+                        hx-confirm="Delete this bid?"
+                        class="w-full px-3 py-2 bg-red-50 text-red-700 text-sm rounded-md hover:bg-red-100">
+                    Delete Bid
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

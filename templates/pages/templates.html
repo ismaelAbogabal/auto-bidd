@@ -1,0 +1,44 @@
+{{define "title"}} — Templates{{end}}
+{{define "content"}}
+<div class="max-w-4xl mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Templates</h1>
+
+    {{if .Templates}}
+    <div class="space-y-3">
+        {{range .Templates}}
+        <div id="template-{{.ID}}" class="bg-white rounded-lg shadow p-4">
+            <div class="flex items-start justify-between">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-sm font-medium text-gray-900">{{.Name}}</h3>
+                    <div class="mt-1 flex items-center gap-4 text-xs text-gray-500">
+                        <span>Wins: {{.WinCount}}</span>
+                        <span>Used: {{.UseCount}}</span>
+                        {{if gt .UseCount 0}}
+                        <span>Win rate: {{printf "%.0f" (divf (mulf (itof .WinCount) 100.0) (itof .UseCount))}}%</span>
+                        {{end}}
+                    </div>
+                    {{if .Tags}}
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        {{range .Tags}}
+                        <span class="px-1.5 py-0.5 bg-indigo-100 text-indigo-700 text-xs rounded">{{.}}</span>
+                        {{end}}
+                    </div>
+                    {{end}}
+                </div>
+                <button hx-delete="/api/templates/{{.ID}}"
+                        hx-target="#template-{{.ID}}"
+                        hx-swap="delete"
+                        hx-confirm="Delete this template?"
+                        class="text-gray-400 hover:text-red-500 text-lg">&times;</button>
+            </div>
+        </div>
+        {{end}}
+    </div>
+    {{else}}
+    <div class="text-center py-12 bg-white rounded-lg shadow">
+        <p class="text-gray-500">No templates yet</p>
+        <p class="mt-1 text-sm text-gray-400">Mark a bid as "Won" and save it as a template</p>
+    </div>
+    {{end}}
+</div>
+{{end}}
