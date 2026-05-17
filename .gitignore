@@ -1,4 +1,4 @@
 .env
 bin/
 tmp/
-server
+/server
