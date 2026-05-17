@@ -3,12 +3,14 @@
 <div class="max-w-4xl mx-auto px-6 py-8">
     <h1 class="text-2xl font-bold text-gray-900 mb-6">New Bid</h1>
 
-    <div id="bid-alert"></div>
+    <div id="bid-result"></div>
 
     <form hx-post="/api/bids"
-          hx-target="#bid-alert"
+          hx-target="#bid-result"
           hx-swap="innerHTML"
-          hx-indicator="#generating"
+          x-data="{ submitting: false }"
+          @htmx:before-request="submitting = true"
+          @htmx:after-request="if(!$event.detail.successful) submitting = false"
           class="bg-white rounded-lg shadow p-6 space-y-5">
 
         <div>
@@ -69,15 +71,11 @@
         </div>
         {{end}}
 
-        <div class="flex items-center gap-3">
-            <button type="submit"
-                class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700">
-                Generate Bid
-            </button>
-            <div id="generating" class="htmx-indicator text-sm text-gray-500">
-                Generating with AI... this may take a moment
-            </div>
-        </div>
+        <button type="submit" :disabled="submitting"
+            class="px-6 py-2 bg-indigo-600 text-white font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            <span x-show="!submitting">Generate Bid</span>
+            <span x-show="submitting">Starting...</span>
+        </button>
     </form>
 </div>
 {{end}}

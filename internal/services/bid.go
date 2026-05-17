@@ -29,68 +29,22 @@ type CreateBidInput struct {
 	TemplateID     *uuid.UUID
 }
 
-func (s *BidService) GenerateBid(ctx context.Context, userID uuid.UUID, input CreateBidInput) (*models.Bid, error) {
-	// Load user profile data
+// CreateBidRecord creates a bid record with empty cover letter, ready for streaming generation.
+func (s *BidService) CreateBidRecord(userID uuid.UUID, input CreateBidInput) (*models.Bid, error) {
 	var profile models.UserProfile
 	s.db.Where("user_id = ?", userID).First(&profile)
 
-	var tones []models.ToneExample
-	s.db.Where("user_id = ?", userID).Find(&tones)
-
-	var portfolio []models.PortfolioItem
-	s.db.Where("user_id = ?", userID).Find(&portfolio)
-
-	// Filter relevant portfolio items
-	relevantPortfolio := selectRelevantPortfolio(portfolio, input.JobDescription)
-
-	// Build prompts
-	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
-
-	// Parse questions
-	var questions []string
-	for _, q := range strings.Split(input.Questions, "\n") {
-		q = strings.TrimSpace(q)
-		if q != "" {
-			questions = append(questions, q)
-		}
-	}
-
-	// Load template cover letter if specified
-	var templateCover string
-	if input.TemplateID != nil {
-		var tmpl models.Template
-		if err := s.db.First(&tmpl, "id = ?", *input.TemplateID).Error; err == nil {
-			templateCover = tmpl.CoverLetterTemplate
-			// Increment use count
-			s.db.Model(&tmpl).Update("use_count", gorm.Expr("use_count + 1"))
-		}
-	}
-
-	aiReq := GenerateBidRequest{
-		JobTitle:       input.JobTitle,
-		JobDescription: input.JobDescription,
-		Questions:      questions,
-		BudgetMin:      input.BudgetMin,
-		BudgetMax:      input.BudgetMax,
-		TemplateCover:  templateCover,
-	}
-
-	userMessage := s.ai.BuildUserMessage(aiReq)
-
-	// Call AI
-	aiResp, err := s.ai.Generate(ctx, systemPrompt, userMessage)
-	if err != nil {
-		return nil, err
-	}
-
-	// Calculate pricing
 	hourlyRate := profile.HourlyRate
 	if hourlyRate == 0 {
-		hourlyRate = 50 // default fallback
+		hourlyRate = 50
 	}
-	totalPrice := float64(aiResp.EstimatedHours) * hourlyRate
 
-	// Create bid record
+	// Increment template use count
+	if input.TemplateID != nil {
+		s.db.Model(&models.Template{}).Where("id = ?", *input.TemplateID).
+			Update("use_count", gorm.Expr("use_count + 1"))
+	}
+
 	bid := &models.Bid{
 		UserID:         userID,
 		TemplateID:     input.TemplateID,
@@ -98,11 +52,7 @@ func (s *BidService) GenerateBid(ctx context.Context, userID uuid.UUID, input Cr
 		JobDescription: input.JobDescription,
 		JobBudgetMin:   input.BudgetMin,
 		JobBudgetMax:   input.BudgetMax,
-		CoverLetter:    aiResp.CoverLetter,
-		EstimatedHours: aiResp.EstimatedHours,
 		HourlyRate:     hourlyRate,
-		TotalPrice:     totalPrice,
-		QAAnswers:      aiResp.QAAnswers,
 		Status:         models.StatusDraft,
 		Platform:       input.Platform,
 	}
@@ -111,7 +61,115 @@ func (s *BidService) GenerateBid(ctx context.Context, userID uuid.UUID, input Cr
 		return nil, err
 	}
 
-	// Save AI response as first chat message
+	return bid, nil
+}
+
+// StreamGenerate runs streaming AI generation for a bid, calling onText for each chunk.
+// Updates the bid record when complete.
+func (s *BidService) StreamGenerate(ctx context.Context, bid *models.Bid, onText func(string)) error {
+	profile, tones, portfolio := s.loadUserContext(bid.UserID)
+	relevantPortfolio := selectRelevantPortfolio(portfolio, bid.JobDescription)
+	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
+
+	questions := parseQuestions(bid.JobDescription)
+
+	var templateCover string
+	if bid.TemplateID != nil {
+		var tmpl models.Template
+		if err := s.db.First(&tmpl, "id = ?", *bid.TemplateID).Error; err == nil {
+			templateCover = tmpl.CoverLetterTemplate
+		}
+	}
+
+	userMessage := s.ai.BuildUserMessage(GenerateBidRequest{
+		JobTitle:       bid.JobTitle,
+		JobDescription: bid.JobDescription,
+		Questions:      questions,
+		BudgetMin:      bid.JobBudgetMin,
+		BudgetMax:      bid.JobBudgetMax,
+		TemplateCover:  templateCover,
+	})
+
+	fullText, err := s.ai.GenerateStream(ctx, systemPrompt, userMessage, onText)
+	if err != nil {
+		return err
+	}
+
+	return s.saveBidFromResponse(bid, fullText)
+}
+
+// StreamRefine runs streaming AI refinement for a bid
+func (s *BidService) StreamRefine(ctx context.Context, bid *models.Bid, message string, onText func(string)) error {
+	profile, tones, portfolio := s.loadUserContext(bid.UserID)
+	relevantPortfolio := selectRelevantPortfolio(portfolio, bid.JobDescription)
+	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
+
+	var history []models.ChatMessage
+	s.db.Where("bid_id = ?", bid.ID).Order("created_at asc").Find(&history)
+
+	// Save user message
+	s.db.Create(&models.ChatMessage{
+		BidID:   bid.ID,
+		Role:    "user",
+		Content: message,
+	})
+
+	fullText, err := s.ai.RefineStream(ctx, systemPrompt, history, message, onText)
+	if err != nil {
+		return err
+	}
+
+	// Save assistant response
+	s.db.Create(&models.ChatMessage{
+		BidID:   bid.ID,
+		Role:    "assistant",
+		Content: fullText,
+	})
+
+	return s.saveBidFromResponse(bid, fullText)
+}
+
+// GenerateBid is the non-streaming version (kept for compatibility)
+func (s *BidService) GenerateBid(ctx context.Context, userID uuid.UUID, input CreateBidInput) (*models.Bid, error) {
+	bid, err := s.CreateBidRecord(userID, input)
+	if err != nil {
+		return nil, err
+	}
+
+	profile, tones, portfolio := s.loadUserContext(userID)
+	relevantPortfolio := selectRelevantPortfolio(portfolio, input.JobDescription)
+	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
+
+	questions := parseQuestions(input.Questions)
+
+	var templateCover string
+	if input.TemplateID != nil {
+		var tmpl models.Template
+		if err := s.db.First(&tmpl, "id = ?", *input.TemplateID).Error; err == nil {
+			templateCover = tmpl.CoverLetterTemplate
+		}
+	}
+
+	userMessage := s.ai.BuildUserMessage(GenerateBidRequest{
+		JobTitle:       input.JobTitle,
+		JobDescription: input.JobDescription,
+		Questions:      questions,
+		BudgetMin:      input.BudgetMin,
+		BudgetMax:      input.BudgetMax,
+		TemplateCover:  templateCover,
+	})
+
+	aiResp, err := s.ai.Generate(ctx, systemPrompt, userMessage)
+	if err != nil {
+		return nil, err
+	}
+
+	bid.CoverLetter = aiResp.CoverLetter
+	bid.EstimatedHours = aiResp.EstimatedHours
+	bid.TotalPrice = float64(aiResp.EstimatedHours) * bid.HourlyRate
+	bid.QAAnswers = aiResp.QAAnswers
+	s.db.Save(bid)
+
 	s.db.Create(&models.ChatMessage{
 		BidID:   bid.ID,
 		Role:    "assistant",
@@ -127,48 +185,32 @@ func (s *BidService) RefineBid(ctx context.Context, bidID uuid.UUID, userID uuid
 		return nil, err
 	}
 
-	// Load profile for system prompt
-	var profile models.UserProfile
-	s.db.Where("user_id = ?", userID).First(&profile)
-
-	var tones []models.ToneExample
-	s.db.Where("user_id = ?", userID).Find(&tones)
-
-	var portfolio []models.PortfolioItem
-	s.db.Where("user_id = ?", userID).Find(&portfolio)
-
+	profile, tones, portfolio := s.loadUserContext(userID)
 	relevantPortfolio := selectRelevantPortfolio(portfolio, bid.JobDescription)
 	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
 
-	// Load chat history
 	var history []models.ChatMessage
 	s.db.Where("bid_id = ?", bidID).Order("created_at asc").Find(&history)
 
-	// Save user message
 	s.db.Create(&models.ChatMessage{
 		BidID:   bidID,
 		Role:    "user",
 		Content: message,
 	})
 
-	// Call AI with history
 	aiResp, err := s.ai.Refine(ctx, systemPrompt, history, message)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update bid
-	hourlyRate := bid.HourlyRate
 	bid.CoverLetter = aiResp.CoverLetter
 	bid.EstimatedHours = aiResp.EstimatedHours
-	bid.TotalPrice = float64(aiResp.EstimatedHours) * hourlyRate
+	bid.TotalPrice = float64(aiResp.EstimatedHours) * bid.HourlyRate
 	if aiResp.QAAnswers != nil {
 		bid.QAAnswers = aiResp.QAAnswers
 	}
-
 	s.db.Save(&bid)
 
-	// Save assistant response
 	s.db.Create(&models.ChatMessage{
 		BidID:   bidID,
 		Role:    "assistant",
@@ -189,7 +231,6 @@ func (s *BidService) UpdateStatus(bidID, userID uuid.UUID, status models.BidStat
 		Update("status", status)
 
 	if status == models.StatusWon {
-		// Increment template win count if bid used a template
 		var bid models.Bid
 		if err := s.db.First(&bid, "id = ?", bidID).Error; err == nil && bid.TemplateID != nil {
 			s.db.Model(&models.Template{}).Where("id = ?", bid.TemplateID).
@@ -200,7 +241,47 @@ func (s *BidService) UpdateStatus(bidID, userID uuid.UUID, status models.BidStat
 	return result.Error
 }
 
-// selectRelevantPortfolio picks up to 3 items with tech stack overlap
+func (s *BidService) saveBidFromResponse(bid *models.Bid, fullText string) error {
+	aiResp, err := ParseResponse(fullText)
+	if err != nil {
+		// Even if parsing fails, save the raw text as cover letter
+		bid.CoverLetter = strings.TrimSpace(fullText)
+		return s.db.Save(bid).Error
+	}
+
+	bid.CoverLetter = aiResp.CoverLetter
+	bid.EstimatedHours = aiResp.EstimatedHours
+	bid.TotalPrice = float64(aiResp.EstimatedHours) * bid.HourlyRate
+	if aiResp.QAAnswers != nil {
+		bid.QAAnswers = aiResp.QAAnswers
+	}
+	return s.db.Save(bid).Error
+}
+
+func (s *BidService) loadUserContext(userID uuid.UUID) (models.UserProfile, []models.ToneExample, []models.PortfolioItem) {
+	var profile models.UserProfile
+	s.db.Where("user_id = ?", userID).First(&profile)
+
+	var tones []models.ToneExample
+	s.db.Where("user_id = ?", userID).Find(&tones)
+
+	var portfolio []models.PortfolioItem
+	s.db.Where("user_id = ?", userID).Find(&portfolio)
+
+	return profile, tones, portfolio
+}
+
+func parseQuestions(text string) []string {
+	var questions []string
+	for _, q := range strings.Split(text, "\n") {
+		q = strings.TrimSpace(q)
+		if q != "" {
+			questions = append(questions, q)
+		}
+	}
+	return questions
+}
+
 func selectRelevantPortfolio(items []models.PortfolioItem, jobDesc string) []models.PortfolioItem {
 	if len(items) <= 3 {
 		return items
@@ -221,14 +302,12 @@ func selectRelevantPortfolio(items []models.PortfolioItem, jobDesc string) []mod
 				score++
 			}
 		}
-		// Also check title/description keywords
 		if strings.Contains(jobLower, strings.ToLower(item.Title)) {
 			score += 2
 		}
 		results = append(results, scored{item: item, score: score})
 	}
 
-	// Sort by score descending (simple bubble sort for small slice)
 	for i := 0; i < len(results); i++ {
 		for j := i + 1; j < len(results); j++ {
 			if results[j].score > results[i].score {

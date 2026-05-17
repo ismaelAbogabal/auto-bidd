@@ -72,10 +72,44 @@
             {{end}}
 
             <!-- Chat Refinement -->
-            <div class="bg-white rounded-lg shadow p-6">
+            <div class="bg-white rounded-lg shadow p-6" x-data="{
+                message: '',
+                streaming: false,
+                streamText: '',
+                error: '',
+                send() {
+                    if (!this.message.trim() || this.streaming) return;
+                    this.streaming = true;
+                    this.streamText = '';
+                    this.error = '';
+                    const msg = encodeURIComponent(this.message);
+                    this.message = '';
+                    const es = new EventSource('/api/bids/{{.Bid.ID}}/refine?message=' + msg);
+                    es.addEventListener('delta', (e) => {
+                        this.streamText += JSON.parse('\"' + e.data + '\"');
+                    });
+                    es.addEventListener('done', (e) => {
+                        es.close();
+                        const data = JSON.parse(e.data);
+                        window.location.href = data.redirect;
+                    });
+                    es.addEventListener('error', (e) => {
+                        this.error = e.data || 'Connection lost';
+                        this.streaming = false;
+                        es.close();
+                    });
+                    es.onerror = () => {
+                        if (this.streaming) {
+                            this.error = 'Connection lost';
+                            this.streaming = false;
+                            es.close();
+                        }
+                    };
+                }
+            }">
                 <h2 class="text-lg font-semibold text-gray-900 mb-3">Refine with AI</h2>
 
-                <div id="chat-messages" class="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                <div class="space-y-3 mb-4 max-h-64 overflow-y-auto">
                     {{range .Messages}}
                     {{if eq .Role "user"}}
                     <div class="flex justify-end">
@@ -87,24 +121,26 @@
                     {{end}}
                 </div>
 
-                <form hx-post="/api/bids/{{.Bid.ID}}/chat"
-                      hx-target="#bid-detail-alert"
-                      hx-swap="innerHTML"
-                      hx-indicator="#refine-loading"
-                      class="flex gap-2"
-                      x-data
-                      @htmx:after-request="if($event.detail.successful) { $el.reset(); window.location.reload(); }">
-                    <input type="text" name="message"
+                <!-- Streaming output -->
+                <div x-show="streaming || streamText" class="mb-4 p-3 bg-gray-50 rounded-lg border">
+                    <div class="flex items-center gap-2 mb-2" x-show="streaming">
+                        <div class="animate-spin h-3 w-3 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
+                        <span class="text-xs text-gray-500">Refining...</span>
+                    </div>
+                    <p class="text-sm text-gray-700 whitespace-pre-wrap" x-text="streamText"></p>
+                </div>
+
+                <div x-show="error" class="mb-3 text-sm text-red-600" x-text="error"></div>
+
+                <form @submit.prevent="send()" class="flex gap-2">
+                    <input type="text" x-model="message" :disabled="streaming"
                         placeholder="e.g., Make it shorter, add more React experience..."
-                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                    <button type="submit"
-                        class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700">
+                        class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50">
+                    <button type="submit" :disabled="streaming || !message.trim()"
+                        class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 disabled:opacity-50">
                         Send
                     </button>
                 </form>
-                <div id="refine-loading" class="htmx-indicator text-sm text-gray-500 mt-2">
-                    AI is refining...
-                </div>
             </div>
         </div>
 

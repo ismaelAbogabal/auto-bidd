@@ -35,6 +35,8 @@ func New(db *gorm.DB, renderer *views.Renderer, aiService *services.AIService) h
 	bidsHandler := handlers.NewBidsHandler(db, bidService, renderer)
 	chatHandler := handlers.NewChatHandler(db, bidService, renderer)
 	templatesHandler := handlers.NewTemplatesHandler(db, renderer)
+	analyticsService := services.NewAnalyticsService(db)
+	analyticsHandler := handlers.NewAnalyticsHandler(analyticsService, renderer)
 
 	// Public routes
 	r.Group(func(r chi.Router) {
@@ -64,13 +66,18 @@ func New(db *gorm.DB, renderer *views.Renderer, aiService *services.AIService) h
 		r.Get("/bids/new", bidsHandler.NewPage)
 		r.Get("/bids/{id}", bidsHandler.DetailPage)
 		r.Post("/api/bids", bidsHandler.Create)
+		r.Get("/api/bids/{id}/generate", bidsHandler.StreamGenerate)
+		r.Get("/api/bids/{id}/refine", bidsHandler.StreamRefine)
 		r.Put("/api/bids/{id}", bidsHandler.Update)
 		r.Patch("/api/bids/{id}/status", bidsHandler.UpdateStatus)
 		r.Delete("/api/bids/{id}", bidsHandler.Delete)
 
-		// Chat
+		// Chat (non-streaming, kept for compatibility)
 		r.Post("/api/bids/{id}/chat", chatHandler.SendMessage)
 		r.Get("/api/bids/{id}/chat", chatHandler.GetMessages)
+
+		// Analytics
+		r.Get("/analytics", analyticsHandler.Page)
 
 		// Templates
 		r.Get("/templates", templatesHandler.ListPage)

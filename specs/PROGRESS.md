@@ -4,79 +4,79 @@
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Project scaffold (go mod, folders, Makefile) | [ ] | |
-| Docker Compose (PostgreSQL) | [ ] | |
-| Config loading (.env) | [ ] | |
-| GORM connection + auto-migrate | [ ] | |
-| Hot reload (air) setup | [ ] | |
-| Static file serving (HTMX, Alpine.js, CSS) | [ ] | |
-| Base HTML templates (layouts, nav) | [ ] | |
+| Project scaffold (go mod, folders, Makefile) | [x] | |
+| Docker Compose (PostgreSQL) | [x] | |
+| Config loading (.env) | [x] | |
+| GORM connection + auto-migrate | [x] | |
+| Hot reload (air) setup | [x] | |
+| Static file serving (HTMX, Alpine.js, CSS) | [x] | |
+| Base HTML templates (layouts, nav) | [x] | Refactored to layout-based rendering (app/auth) |
 
 ## Phase 2: Auth
 
 | Task | Status | Notes |
 |------|--------|-------|
-| User model + migration | [ ] | |
-| Register handler (bcrypt hash) | [ ] | |
-| Login handler (session cookie) | [ ] | |
-| Logout handler | [ ] | |
-| Auth middleware (protect routes) | [ ] | |
-| Login page (HTMX form) | [ ] | |
-| Register page (HTMX form) | [ ] | |
+| User model + migration | [x] | |
+| Register handler (bcrypt hash) | [x] | |
+| Login handler (session cookie) | [x] | |
+| Logout handler | [x] | |
+| Auth middleware (protect routes) | [x] | |
+| Login page (HTMX form) | [x] | |
+| Register page (HTMX form) | [x] | |
 
 ## Phase 3: Profile
 
 | Task | Status | Notes |
 |------|--------|-------|
-| UserProfile model | [ ] | |
-| ToneExample model | [ ] | |
-| PortfolioItem model | [ ] | |
-| Profile page (view + edit) | [ ] | |
-| Tone examples CRUD (HTMX partials) | [ ] | |
-| Portfolio items CRUD (HTMX partials) | [ ] | |
-| AI instructions editor | [ ] | |
-| Skills tag input (Alpine.js) | [ ] | |
+| UserProfile model | [x] | |
+| ToneExample model | [x] | |
+| PortfolioItem model | [x] | |
+| Profile page (view + edit) | [x] | |
+| Tone examples CRUD (HTMX partials) | [x] | |
+| Portfolio items CRUD (HTMX partials) | [x] | |
+| AI instructions editor | [x] | |
+| Skills tag input (Alpine.js) | [x] | |
 
 ## Phase 4: Bid Builder
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Bid model | [ ] | |
-| ChatMessage model | [ ] | |
-| AI service (Claude API client) | [ ] | |
-| Prompt builder (system prompt assembly) | [ ] | |
-| Bid generation endpoint | [ ] | |
-| SSE streaming response | [ ] | |
-| Bid builder page (job input form) | [ ] | |
-| Generated output display | [ ] | |
-| Manual edit mode (Alpine.js toggle) | [ ] | |
-| Chat refinement (HTMX + SSE) | [ ] | |
-| Pricing display (hours x rate) | [ ] | |
-| Q&A answers rendering | [ ] | |
-| Bid list page | [ ] | |
-| Bid detail page | [ ] | |
-| Status update (draft/submitted/won/lost) | [ ] | |
+| Bid model | [x] | |
+| ChatMessage model | [x] | |
+| AI service (Claude API client) | [x] | |
+| Prompt builder (system prompt assembly) | [x] | |
+| Bid generation endpoint | [x] | |
+| SSE streaming response | [x] | Bid generation + chat refinement |
+| Bid builder page (job input form) | [x] | |
+| Generated output display | [x] | |
+| Manual edit mode (Alpine.js toggle) | [x] | |
+| Chat refinement (HTMX + SSE) | [x] | Full SSE streaming |
+| Pricing display (hours x rate) | [x] | |
+| Q&A answers rendering | [x] | |
+| Bid list page | [x] | |
+| Bid detail page | [x] | |
+| Status update (draft/submitted/won/lost) | [x] | |
 
 ## Phase 5: Templates
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Template model | [ ] | |
-| Save winning bid as template | [ ] | |
-| Template list page | [ ] | |
-| Use template when generating new bid | [ ] | |
-| Template win/use count tracking | [ ] | |
+| Template model | [x] | |
+| Save winning bid as template | [x] | |
+| Template list page | [x] | |
+| Use template when generating new bid | [x] | |
+| Template win/use count tracking | [x] | |
 
 ## Phase 6: Analytics
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Win rate calculation | [ ] | |
-| Average pricing stats | [ ] | |
-| Win rate by price bracket | [ ] | |
-| Trends over time (chart data) | [ ] | |
-| Template effectiveness | [ ] | |
-| Analytics page (HTMX + Alpine charts) | [ ] | |
+| Win rate calculation | [x] | |
+| Average pricing stats | [x] | |
+| Win rate by price bracket | [x] | CSS bar charts |
+| Trends over time (chart data) | [x] | Monthly aggregates with bar chart |
+| Template effectiveness | [x] | Includes "no template" baseline |
+| Analytics page (HTMX + Alpine charts) | [x] | Period filter (30d/90d/6m/1y/all) |
 
 ## Phase 7: Polish
 
@@ -84,7 +84,7 @@
 |------|--------|-------|
 | Error handling (flash messages) | [ ] | |
 | Form validation (server + client) | [ ] | |
-| Loading states (HTMX indicators) | [ ] | |
-| Empty states | [ ] | |
+| Loading states (HTMX indicators) | [x] | Bid generation + chat refinement |
+| Empty states | [x] | Bid list + templates |
 | Responsive design | [ ] | |
 | Rate limiting | [ ] | |

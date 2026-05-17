@@ -1,0 +1,123 @@
+{{define "title"}} — Analytics{{end}}
+{{define "content"}}
+<div class="max-w-6xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">Analytics</h1>
+        <select hx-get="/analytics" hx-target="body" hx-push-url="true"
+            name="period"
+            class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+            <option value="30d" {{if eq .Period "30d"}}selected{{end}}>Last 30 days</option>
+            <option value="90d" {{if or (eq .Period "90d") (eq .Period "")}}selected{{end}}>Last 90 days</option>
+            <option value="6m" {{if eq .Period "6m"}}selected{{end}}>Last 6 months</option>
+            <option value="1y" {{if eq .Period "1y"}}selected{{end}}>Last year</option>
+            <option value="all" {{if eq .Period "all"}}selected{{end}}>All time</option>
+        </select>
+    </div>
+
+    <!-- Overview Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div class="bg-white rounded-lg shadow p-5">
+            <p class="text-sm text-gray-500">Total Bids</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{.Overview.TotalBids}}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-5">
+            <p class="text-sm text-gray-500">Win Rate</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">{{printf "%.0f" .Overview.WinRate}}%</p>
+            <p class="text-xs text-gray-400 mt-1">{{.Overview.Won}}W / {{.Overview.Lost}}L</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-5">
+            <p class="text-sm text-gray-500">Avg Price</p>
+            <p class="text-2xl font-bold text-gray-900 mt-1">${{printf "%.0f" .Overview.AvgPrice}}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow p-5">
+            <p class="text-sm text-gray-500">Revenue</p>
+            <p class="text-2xl font-bold text-indigo-600 mt-1">${{printf "%.0f" .Overview.TotalRevenue}}</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Monthly Trends -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Monthly Trends</h2>
+            {{if .Trends}}
+            <div class="space-y-3">
+                {{range .Trends}}
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-600">{{.Month}}</span>
+                        <span class="text-gray-500">{{.Bids}} bids · {{.Won}} won · ${{printf "%.0f" .Revenue}}</span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-4 flex overflow-hidden">
+                        {{if gt .Bids 0}}
+                        <div class="bg-green-500 h-4 rounded-l-full" style="width: {{printf "%.0f" .WinRate}}%"></div>
+                        <div class="bg-gray-300 h-4" style="width: {{printf "%.0f" (mulf (divf (itof (sub .Bids .Won)) (itof .Bids)) 100)}}%"></div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+            {{else}}
+            <p class="text-sm text-gray-400">No data for this period</p>
+            {{end}}
+        </div>
+
+        <!-- Win Rate by Price -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Win Rate by Price</h2>
+            <div class="space-y-3">
+                {{range .Brackets}}
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="text-gray-600">{{.Label}}</span>
+                        <span class="text-gray-500">
+                            {{if gt .Total 0}}{{printf "%.0f" .WinRate}}% ({{.Won}}/{{.Total}}){{else}}—{{end}}
+                        </span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-4">
+                        {{if gt .Total 0}}
+                        <div class="bg-indigo-500 h-4 rounded-full transition-all" style="width: {{printf "%.0f" .WinRate}}%"></div>
+                        {{end}}
+                    </div>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Template Effectiveness -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Template Effectiveness</h2>
+        {{if .Templates}}
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-gray-500 border-b">
+                    <th class="pb-2">Template</th>
+                    <th class="pb-2 text-right">Uses</th>
+                    <th class="pb-2 text-right">Wins</th>
+                    <th class="pb-2 text-right">Win Rate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Templates}}
+                <tr class="border-b last:border-0">
+                    <td class="py-2 font-medium text-gray-900">{{.Name}}</td>
+                    <td class="py-2 text-right text-gray-600">{{.Uses}}</td>
+                    <td class="py-2 text-right text-gray-600">{{.Wins}}</td>
+                    <td class="py-2 text-right">
+                        <span class="px-2 py-0.5 rounded text-xs
+                            {{if gt .WinRate 40.0}}bg-green-100 text-green-700
+                            {{else if gt .WinRate 20.0}}bg-yellow-100 text-yellow-700
+                            {{else}}bg-gray-100 text-gray-600{{end}}">
+                            {{printf "%.0f" .WinRate}}%
+                        </span>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="text-sm text-gray-400">No template data yet</p>
+        {{end}}
+    </div>
+</div>
+{{end}}

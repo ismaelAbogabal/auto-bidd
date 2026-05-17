@@ -44,12 +44,19 @@ func (r *Renderer) funcMap() template.FuncMap {
 			}
 			return a / b
 		},
+		"sub": func(a, b int) int {
+			return a - b
+		},
 	}
 }
 
 func (r *Renderer) loadTemplates() {
 	baseLayout := filepath.Join(r.baseDir, "layouts", "base.html")
 	components, _ := filepath.Glob(filepath.Join(r.baseDir, "components", "*.html"))
+	partials, _ := filepath.Glob(filepath.Join(r.baseDir, "partials", "*.html"))
+
+	// Shared templates available to all pages
+	shared := append(components, partials...)
 
 	// Discover layouts (excluding base.html)
 	layoutGlob, _ := filepath.Glob(filepath.Join(r.baseDir, "layouts", "*.html"))
@@ -67,15 +74,14 @@ func (r *Renderer) loadTemplates() {
 		pageName := strings.TrimSuffix(filepath.Base(page), ".html")
 		for layoutName, layoutFile := range layouts {
 			files := []string{baseLayout, layoutFile}
-			files = append(files, components...)
+			files = append(files, shared...)
 			files = append(files, page)
 			tmpl := template.Must(template.New(filepath.Base(page)).Funcs(r.funcMap()).ParseFiles(files...))
 			r.templates[layoutName+":"+pageName] = tmpl
 		}
 	}
 
-	// Load partials
-	partials, _ := filepath.Glob(filepath.Join(r.baseDir, "partials", "*.html"))
+	// Load partials (for standalone rendering via Partial())
 	for _, partial := range partials {
 		name := strings.TrimSuffix(filepath.Base(partial), ".html")
 		files := append([]string{partial}, components...)

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -75,7 +76,7 @@ func (h *BidsHandler) DetailPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Create generates a new bid via AI
+// Create creates a bid record and returns HTML with the streaming component
 func (h *BidsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 
@@ -107,15 +108,103 @@ func (h *BidsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TemplateID:     templateID,
 	}
 
-	bid, err := h.bids.GenerateBid(r.Context(), user.ID, input)
+	bid, err := h.bids.CreateBidRecord(user.ID, input)
 	if err != nil {
-		h.renderer.Partial(w, "alert", map[string]any{"Type": "error", "Message": "AI generation failed: " + err.Error()})
+		h.renderer.Partial(w, "alert", map[string]any{"Type": "error", "Message": "Failed to create bid"})
 		return
 	}
 
-	// Redirect to the bid detail page
-	w.Header().Set("HX-Redirect", "/bids/"+bid.ID.String())
-	w.WriteHeader(http.StatusOK)
+	// Return the streaming component
+	h.renderer.Partial(w, "bid_stream", map[string]any{
+		"BidID":    bid.ID.String(),
+		"Endpoint": fmt.Sprintf("/api/bids/%s/generate", bid.ID),
+	})
+}
+
+// StreamGenerate is the SSE endpoint for bid generation
+func (h *BidsHandler) StreamGenerate(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var bid models.Bid
+	if err := h.db.Where("id = ? AND user_id = ?", id, user.ID).First(&bid).Error; err != nil {
+		http.Error(w, "Bid not found", http.StatusNotFound)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	err = h.bids.StreamGenerate(r.Context(), &bid, func(text string) {
+		fmt.Fprintf(w, "event: delta\ndata: %s\n\n", escapeSSE(text))
+		flusher.Flush()
+	})
+
+	if err != nil {
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE(err.Error()))
+		flusher.Flush()
+		return
+	}
+
+	fmt.Fprintf(w, "event: done\ndata: {\"redirect\":\"/bids/%s\"}\n\n", bid.ID)
+	flusher.Flush()
+}
+
+// StreamRefine is the SSE endpoint for chat refinement
+func (h *BidsHandler) StreamRefine(w http.ResponseWriter, r *http.Request) {
+	user := middleware.GetUser(r)
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var bid models.Bid
+	if err := h.db.Where("id = ? AND user_id = ?", id, user.ID).First(&bid).Error; err != nil {
+		http.Error(w, "Bid not found", http.StatusNotFound)
+		return
+	}
+
+	message := r.URL.Query().Get("message")
+	if message == "" {
+		http.Error(w, "Message required", http.StatusBadRequest)
+		return
+	}
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	err = h.bids.StreamRefine(r.Context(), &bid, message, func(text string) {
+		fmt.Fprintf(w, "event: delta\ndata: %s\n\n", escapeSSE(text))
+		flusher.Flush()
+	})
+
+	if err != nil {
+		fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE(err.Error()))
+		flusher.Flush()
+		return
+	}
+
+	fmt.Fprintf(w, "event: done\ndata: {\"redirect\":\"/bids/%s\"}\n\n", bid.ID)
+	flusher.Flush()
 }
 
 // Update handles manual edits to a bid
@@ -163,7 +252,6 @@ func (h *BidsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// If marked as submitted, update submitted_at
 	if status == models.StatusSubmitted {
 		now := time.Now()
 		h.db.Model(&models.Bid{}).Where("id = ?", id).Update("submitted_at", &now)
@@ -181,10 +269,16 @@ func (h *BidsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete messages first
 	h.db.Where("bid_id = ?", id).Delete(&models.ChatMessage{})
 	h.db.Where("id = ? AND user_id = ?", id, user.ID).Delete(&models.Bid{})
 
 	w.Header().Set("HX-Redirect", "/bids")
 	w.WriteHeader(http.StatusOK)
+}
+
+// escapeSSE escapes newlines for SSE data field
+func escapeSSE(s string) string {
+	s = fmt.Sprintf("%q", s)
+	// Remove surrounding quotes from %q
+	return s[1 : len(s)-1]
 }
