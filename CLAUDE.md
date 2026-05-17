@@ -57,10 +57,13 @@ Templates use a **layout-based composition** pattern:
 
 ## AI integration
 
-- System prompt is built from user profile, tone examples, portfolio, and custom instructions
+- **Multi-provider**: supports Anthropic (Claude) and OpenAI-compatible APIs (OpenAI, DeepSeek, Ollama, etc.)
+- Configured via `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL` env vars
+- `LLMProvider` interface (`provider.go`) with `AnthropicProvider` and `OpenAIProvider` implementations
+- `AIService` uses the provider for API calls, keeps prompt building and response parsing shared
 - Output format: plain text cover letter + `---META---` separator + JSON metadata
-- Streaming uses Claude's SSE API → forwarded to browser via EventSource
-- Prompt caching enabled on system prompt and last chat history message
+- Streaming: provider-specific SSE parsing (Anthropic `content_block_delta` vs OpenAI `choices[].delta.content`)
+- Anthropic prompt caching enabled on system prompt and last chat history message
 - Non-streaming fallback methods exist for backward compat
 
 ## Key conventions

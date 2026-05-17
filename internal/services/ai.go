@@ -1,30 +1,20 @@
 package services
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 
 	"github.com/ismaelfi/auto-bidd/internal/models"
 )
 
 type AIService struct {
-	apiKey     string
-	model      string
-	httpClient *http.Client
+	provider LLMProvider
 }
 
-func NewAIService(apiKey, model string) *AIService {
-	return &AIService{
-		apiKey:     apiKey,
-		model:      model,
-		httpClient: &http.Client{},
-	}
+func NewAIService(provider LLMProvider) *AIService {
+	return &AIService{provider: provider}
 }
 
 type GenerateBidRequest struct {
@@ -48,7 +38,6 @@ func (s *AIService) BuildSystemPrompt(profile *models.UserProfile, tones []model
 
 	sb.WriteString("You are a freelance proposal writer. Your job is to write winning bids for freelance projects.\n\n")
 
-	// Writer profile
 	sb.WriteString("## About the Writer\n")
 	if profile.FullName != "" {
 		sb.WriteString(fmt.Sprintf("- Name: %s\n", profile.FullName))
@@ -64,7 +53,6 @@ func (s *AIService) BuildSystemPrompt(profile *models.UserProfile, tones []model
 	}
 	sb.WriteString("\n")
 
-	// Tone examples
 	if len(tones) > 0 {
 		sb.WriteString("## Writing Style\nWrite in this tone and style. Match the voice in these examples:\n\n")
 		for _, t := range tones {
@@ -79,7 +67,6 @@ func (s *AIService) BuildSystemPrompt(profile *models.UserProfile, tones []model
 		}
 	}
 
-	// Portfolio
 	if len(portfolio) > 0 {
 		sb.WriteString("## Relevant Past Work\nReference these when relevant to demonstrate experience:\n\n")
 		for _, p := range portfolio {
@@ -94,14 +81,12 @@ func (s *AIService) BuildSystemPrompt(profile *models.UserProfile, tones []model
 		sb.WriteString("\n")
 	}
 
-	// AI instructions
 	if profile.AIInstructions != "" {
 		sb.WriteString("## Custom Rules\nFollow these instructions strictly:\n")
 		sb.WriteString(profile.AIInstructions)
 		sb.WriteString("\n\n")
 	}
 
-	// Output format
 	sb.WriteString(`## Output Format
 Write the cover letter directly as plain text. Do not wrap it in quotes or JSON.
 
@@ -145,239 +130,46 @@ func (s *AIService) BuildUserMessage(req GenerateBidRequest) string {
 	return sb.String()
 }
 
-// Generate calls the API without streaming (used as fallback)
 func (s *AIService) Generate(ctx context.Context, systemPrompt, userMessage string) (*GenerateBidResponse, error) {
-	body := map[string]any{
-		"model":      s.model,
-		"max_tokens": 2048,
-		"system": []map[string]any{
-			{
-				"type":          "text",
-				"text":          systemPrompt,
-				"cache_control": map[string]string{"type": "ephemeral"},
-			},
-		},
-		"messages": []map[string]string{
-			{"role": "user", "content": userMessage},
-		},
-	}
-
-	text, err := s.callAPI(ctx, body)
+	messages := []Message{{Role: "user", Content: userMessage}}
+	text, err := s.provider.Call(ctx, systemPrompt, messages, 2048)
 	if err != nil {
 		return nil, err
 	}
-
 	return ParseResponse(text)
 }
 
-// GenerateStream calls the API with streaming, calling onText for each text chunk.
-// Returns the full accumulated text.
 func (s *AIService) GenerateStream(ctx context.Context, systemPrompt, userMessage string, onText func(string)) (string, error) {
-	body := map[string]any{
-		"model":      s.model,
-		"max_tokens": 2048,
-		"stream":     true,
-		"system": []map[string]any{
-			{
-				"type":          "text",
-				"text":          systemPrompt,
-				"cache_control": map[string]string{"type": "ephemeral"},
-			},
-		},
-		"messages": []map[string]string{
-			{"role": "user", "content": userMessage},
-		},
-	}
-
-	return s.callStreamAPI(ctx, body, onText)
+	messages := []Message{{Role: "user", Content: userMessage}}
+	return s.provider.CallStream(ctx, systemPrompt, messages, 2048, onText)
 }
 
-// Refine calls the API without streaming
 func (s *AIService) Refine(ctx context.Context, systemPrompt string, history []models.ChatMessage, newMessage string) (*GenerateBidResponse, error) {
-	messages := buildMessages(history, newMessage)
-
-	body := map[string]any{
-		"model":      s.model,
-		"max_tokens": 2048,
-		"system": []map[string]any{
-			{
-				"type":          "text",
-				"text":          systemPrompt,
-				"cache_control": map[string]string{"type": "ephemeral"},
-			},
-		},
-		"messages": messages,
-	}
-
-	text, err := s.callAPI(ctx, body)
+	messages := toMessages(history, newMessage)
+	text, err := s.provider.Call(ctx, systemPrompt, messages, 2048)
 	if err != nil {
 		return nil, err
 	}
-
 	return ParseResponse(text)
 }
 
-// RefineStream calls the API with streaming
 func (s *AIService) RefineStream(ctx context.Context, systemPrompt string, history []models.ChatMessage, newMessage string, onText func(string)) (string, error) {
-	messages := buildMessages(history, newMessage)
-
-	body := map[string]any{
-		"model":      s.model,
-		"max_tokens": 2048,
-		"stream":     true,
-		"system": []map[string]any{
-			{
-				"type":          "text",
-				"text":          systemPrompt,
-				"cache_control": map[string]string{"type": "ephemeral"},
-			},
-		},
-		"messages": messages,
-	}
-
-	return s.callStreamAPI(ctx, body, onText)
+	messages := toMessages(history, newMessage)
+	return s.provider.CallStream(ctx, systemPrompt, messages, 2048, onText)
 }
 
-// buildMessages constructs the messages array with cache control on the last history message
-func buildMessages(history []models.ChatMessage, newMessage string) []map[string]any {
-	messages := make([]map[string]any, 0, len(history)+1)
-
+// toMessages converts chat history + new message into provider-agnostic Messages
+func toMessages(history []models.ChatMessage, newMessage string) []Message {
+	messages := make([]Message, 0, len(history)+1)
 	for i, msg := range history {
-		content := []map[string]any{
-			{"type": "text", "text": msg.Content},
-		}
-		if i == len(history)-1 {
-			content = []map[string]any{
-				{
-					"type":          "text",
-					"text":          msg.Content,
-					"cache_control": map[string]string{"type": "ephemeral"},
-				},
-			}
-		}
-		messages = append(messages, map[string]any{
-			"role":    msg.Role,
-			"content": content,
+		messages = append(messages, Message{
+			Role:            msg.Role,
+			Content:         msg.Content,
+			CacheBreakpoint: i == len(history)-1,
 		})
 	}
-
-	messages = append(messages, map[string]any{
-		"role": "user",
-		"content": []map[string]any{
-			{"type": "text", "text": newMessage},
-		},
-	})
-
+	messages = append(messages, Message{Role: "user", Content: newMessage})
 	return messages
-}
-
-// callAPI makes a non-streaming request and returns the response text
-func (s *AIService) callAPI(ctx context.Context, body map[string]any) (string, error) {
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(jsonBody))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", s.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("api call: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("api error (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var apiResp struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return "", fmt.Errorf("decode response: %w", err)
-	}
-
-	if len(apiResp.Content) == 0 {
-		return "", fmt.Errorf("empty response from API")
-	}
-
-	return apiResp.Content[0].Text, nil
-}
-
-// callStreamAPI makes a streaming request, calling onText for each text delta
-func (s *AIService) callStreamAPI(ctx context.Context, body map[string]any, onText func(string)) (string, error) {
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		return "", fmt.Errorf("marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(jsonBody))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", s.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("api call: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("api error (status %d): %s", resp.StatusCode, string(respBody))
-	}
-
-	var fullText strings.Builder
-	var eventType string
-
-	scanner := bufio.NewScanner(resp.Body)
-	// Increase buffer size for large SSE data lines
-	scanner.Buffer(make([]byte, 64*1024), 256*1024)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.HasPrefix(line, "event: ") {
-			eventType = strings.TrimPrefix(line, "event: ")
-			continue
-		}
-
-		if strings.HasPrefix(line, "data: ") && eventType == "content_block_delta" {
-			data := strings.TrimPrefix(line, "data: ")
-			var delta struct {
-				Delta struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"delta"`
-			}
-			if err := json.Unmarshal([]byte(data), &delta); err == nil && delta.Delta.Type == "text_delta" {
-				fullText.WriteString(delta.Delta.Text)
-				onText(delta.Delta.Text)
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fullText.String(), fmt.Errorf("stream read error: %w", err)
-	}
-
-	return fullText.String(), nil
 }
 
 // ParseResponse parses the cover letter + ---META--- format
@@ -393,7 +185,6 @@ func ParseResponse(text string) (*GenerateBidResponse, error) {
 		}
 	}
 
-	// Parse text + ---META--- format
 	result := &GenerateBidResponse{}
 
 	parts := strings.SplitN(text, "---META---", 2)
@@ -421,7 +212,6 @@ func ParseResponse(text string) (*GenerateBidResponse, error) {
 	return result, nil
 }
 
-// extractJSON tries to find JSON in a response that may be wrapped in markdown code blocks
 func extractJSON(s string) string {
 	s = strings.TrimSpace(s)
 
