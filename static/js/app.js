@@ -1,19 +1,28 @@
-function bidStream(endpoint) {
+function bidStream(endpoint, hourlyRate) {
     return {
-        text: '',
+        raw: '',
+        coverLetter: '',
+        hours: 0,
+        rate: hourlyRate || 0,
+        total: 0,
+        reasoning: '',
+        qaAnswers: [],
         done: false,
         error: '',
+        metaParsed: false,
         init() {
             var self = this;
             var es = new EventSource(endpoint);
             es.addEventListener('delta', function(e) {
-                self.text += JSON.parse('"' + e.data + '"');
+                self.raw += JSON.parse('"' + e.data + '"');
+                self._parse();
             });
             es.addEventListener('done', function(e) {
                 self.done = true;
                 es.close();
+                self._parse();
                 var data = JSON.parse(e.data);
-                setTimeout(function() { window.location.href = data.redirect; }, 500);
+                setTimeout(function() { window.location.href = data.redirect; }, 1500);
             });
             es.addEventListener('error', function(e) {
                 self.error = e.data || 'Connection lost';
@@ -25,6 +34,35 @@ function bidStream(endpoint) {
                     es.close();
                 }
             };
+        },
+        _parse() {
+            var idx = this.raw.indexOf('---META---');
+            if (idx === -1) {
+                this.coverLetter = this.raw;
+                return;
+            }
+            this.coverLetter = this.raw.substring(0, idx).trim();
+            if (!this.metaParsed) {
+                var metaStr = this.raw.substring(idx + 10).trim();
+                try {
+                    var jsonStr = metaStr;
+                    if (jsonStr.indexOf('```') !== -1) {
+                        var start = jsonStr.indexOf('{');
+                        var end = jsonStr.lastIndexOf('}');
+                        if (start !== -1 && end !== -1) {
+                            jsonStr = jsonStr.substring(start, end + 1);
+                        }
+                    }
+                    var meta = JSON.parse(jsonStr);
+                    this.hours = meta.estimated_hours || 0;
+                    this.total = this.hours * this.rate;
+                    this.reasoning = meta.reasoning || '';
+                    this.qaAnswers = meta.qa_answers || [];
+                    this.metaParsed = true;
+                } catch(e) {
+                    // META JSON not complete yet, wait for more data
+                }
+            }
         }
     };
 }

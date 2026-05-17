@@ -116,8 +116,9 @@ func (h *BidsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Return the streaming component
 	h.renderer.Partial(w, "bid_stream", map[string]any{
-		"BidID":    bid.ID.String(),
-		"Endpoint": fmt.Sprintf("/api/bids/%s/generate", bid.ID),
+		"BidID":      bid.ID.String(),
+		"Endpoint":   fmt.Sprintf("/api/bids/%s/generate", bid.ID),
+		"HourlyRate": bid.HourlyRate,
 	})
 }
 
