@@ -55,9 +55,6 @@ func (r *Renderer) loadTemplates() {
 	components, _ := filepath.Glob(filepath.Join(r.baseDir, "components", "*.html"))
 	partials, _ := filepath.Glob(filepath.Join(r.baseDir, "partials", "*.html"))
 
-	// Shared templates available to all pages
-	shared := append(components, partials...)
-
 	// Discover layouts (excluding base.html)
 	layoutGlob, _ := filepath.Glob(filepath.Join(r.baseDir, "layouts", "*.html"))
 	layouts := make(map[string]string)
@@ -74,7 +71,7 @@ func (r *Renderer) loadTemplates() {
 		pageName := strings.TrimSuffix(filepath.Base(page), ".html")
 		for layoutName, layoutFile := range layouts {
 			files := []string{baseLayout, layoutFile}
-			files = append(files, shared...)
+			files = append(files, components...)
 			files = append(files, page)
 			tmpl := template.Must(template.New(filepath.Base(page)).Funcs(r.funcMap()).ParseFiles(files...))
 			r.templates[layoutName+":"+pageName] = tmpl
