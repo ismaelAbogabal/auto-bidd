@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
@@ -50,6 +51,7 @@ func (s *BidService) CreateBidRecord(userID uuid.UUID, input CreateBidInput) (*m
 		TemplateID:     input.TemplateID,
 		JobTitle:       input.JobTitle,
 		JobDescription: input.JobDescription,
+		Questions:      input.Questions,
 		JobBudgetMin:   input.BudgetMin,
 		JobBudgetMax:   input.BudgetMax,
 		HourlyRate:     hourlyRate,
@@ -67,11 +69,16 @@ func (s *BidService) CreateBidRecord(userID uuid.UUID, input CreateBidInput) (*m
 // StreamGenerate runs streaming AI generation for a bid, calling onText for each chunk.
 // Updates the bid record when complete.
 func (s *BidService) StreamGenerate(ctx context.Context, bid *models.Bid, onText func(string)) error {
+	log.Printf("[AI] loading user context for %s", bid.UserID)
 	profile, tones, portfolio := s.loadUserContext(bid.UserID)
 	relevantPortfolio := selectRelevantPortfolio(portfolio, bid.JobDescription)
-	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
+	log.Printf("[AI] user context: profile=%q, tones=%d, portfolio=%d (relevant=%d)",
+		profile.FullName, len(tones), len(portfolio), len(relevantPortfolio))
 
-	questions := parseQuestions(bid.JobDescription)
+	systemPrompt := s.ai.BuildSystemPrompt(&profile, tones, relevantPortfolio)
+	log.Printf("[AI] system prompt: %d chars", len(systemPrompt))
+
+	questions := parseQuestions(bid.Questions)
 
 	var templateCover string
 	if bid.TemplateID != nil {
@@ -89,13 +96,35 @@ func (s *BidService) StreamGenerate(ctx context.Context, bid *models.Bid, onText
 		BudgetMax:      bid.JobBudgetMax,
 		TemplateCover:  templateCover,
 	})
+	log.Printf("[AI] user message: %d chars, questions=%d", len(userMessage), len(questions))
 
+	log.Printf("[AI] calling LLM provider...")
 	fullText, err := s.ai.GenerateStream(ctx, systemPrompt, userMessage, onText)
 	if err != nil {
+		log.Printf("[AI] stream error: %v", err)
 		return err
 	}
 
-	return s.saveBidFromResponse(bid, fullText)
+	log.Printf("[AI] stream finished, response: %d chars", len(fullText))
+	if err := s.saveBidFromResponse(bid, fullText); err != nil {
+		log.Printf("[AI] save error: %v", err)
+		return err
+	}
+
+	// Save the initial exchange as chat history so refinement has context
+	s.db.Create(&models.ChatMessage{
+		BidID:   bid.ID,
+		Role:    "user",
+		Content: userMessage,
+	})
+	s.db.Create(&models.ChatMessage{
+		BidID:   bid.ID,
+		Role:    "assistant",
+		Content: fullText,
+	})
+
+	log.Printf("[AI] bid %s saved successfully", bid.ID)
+	return nil
 }
 
 // StreamRefine runs streaming AI refinement for a bid

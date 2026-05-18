@@ -28,6 +28,7 @@ type Bid struct {
 	TemplateID     *uuid.UUID `gorm:"type:uuid;index"`
 	JobTitle       string     `gorm:"size:500;not null"`
 	JobDescription string     `gorm:"type:text;not null"`
+	Questions      string     `gorm:"type:text"`
 	JobBudgetMin   float64    `gorm:"type:decimal(10,2)"`
 	JobBudgetMax   float64    `gorm:"type:decimal(10,2)"`
 	CoverLetter    string     `gorm:"type:text"`

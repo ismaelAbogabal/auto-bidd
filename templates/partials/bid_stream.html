@@ -1,5 +1,5 @@
 {{define "bid_stream"}}
-<div class="mt-6" x-data="bidStream('{{.Endpoint}}', {{.HourlyRate}})">
+<div class="mt-6" x-data="bidStream('{{.Endpoint}}', {{.HourlyRate}})" hx-on::load="Alpine.initTree(this)">
 
     <!-- Status bar -->
     <div class="mb-4">
