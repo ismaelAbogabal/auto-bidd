@@ -1,96 +1,29 @@
-function bidStream(endpoint, hourlyRate) {
+function bidDetail(config) {
     return {
-        raw: '',
-        coverLetter: '',
-        hours: 0,
-        rate: hourlyRate || 0,
-        total: 0,
-        reasoning: '',
-        qaAnswers: [],
-        done: false,
-        error: '',
-        metaParsed: false,
-        init() {
-            var self = this;
-            var es = new EventSource(endpoint);
-            es.addEventListener('delta', function(e) {
-                self.raw += JSON.parse('"' + e.data + '"');
-                self._parse();
-            });
-            es.addEventListener('done', function(e) {
-                self.done = true;
-                es.close();
-                self._parse();
-                var data = JSON.parse(e.data);
-                setTimeout(function() { window.location.href = data.redirect; }, 1500);
-            });
-            es.addEventListener('error', function(e) {
-                self.error = e.data || 'Connection lost';
-                es.close();
-            });
-            es.onerror = function() {
-                if (!self.done) {
-                    self.error = 'Connection lost';
-                    es.close();
-                }
-            };
-        },
-        _parse() {
-            var idx = this.raw.indexOf('---META---');
-            if (idx === -1) {
-                this.coverLetter = this.raw;
-                return;
-            }
-            this.coverLetter = this.raw.substring(0, idx).trim();
-            if (!this.metaParsed) {
-                var metaStr = this.raw.substring(idx + 10).trim();
-                try {
-                    var jsonStr = metaStr;
-                    if (jsonStr.indexOf('```') !== -1) {
-                        var start = jsonStr.indexOf('{');
-                        var end = jsonStr.lastIndexOf('}');
-                        if (start !== -1 && end !== -1) {
-                            jsonStr = jsonStr.substring(start, end + 1);
-                        }
-                    }
-                    var meta = JSON.parse(jsonStr);
-                    this.hours = meta.estimated_hours || 0;
-                    this.total = this.hours * this.rate;
-                    this.reasoning = meta.reasoning || '';
-                    this.qaAnswers = meta.qa_answers || [];
-                    this.metaParsed = true;
-                } catch(e) {
-                    // META JSON not complete yet, wait for more data
-                }
-            }
-        }
-    };
-}
-
-function bidRefine(bidId, hourlyRate) {
-    return {
-        message: '',
+        bidId: config.bidId,
+        coverLetter: config.coverLetter || '',
+        hours: config.hours || 0,
+        rate: config.rate || 0,
+        reasoning: config.reasoning || '',
+        qaAnswers: config.qaAnswers || [],
         streaming: false,
-        raw: '',
-        coverLetter: '',
-        hours: 0,
-        rate: hourlyRate || 0,
-        reasoning: '',
-        qaAnswers: [],
-        metaParsed: false,
+        editing: false,
         error: '',
-        send() {
-            if (!this.message.trim() || this.streaming) return;
-            this.streaming = true;
-            this.raw = '';
-            this.coverLetter = '';
-            this.hours = 0;
-            this.reasoning = '';
-            this.qaAnswers = [];
-            this.metaParsed = false;
-            this.error = '';
+        message: '',
 
-            // Show the sent message in chat
+        // internal
+        _raw: '',
+        _metaParsed: false,
+
+        get total() { return this.hours * this.rate; },
+
+        startGenerate() {
+            this._stream('/api/bids/' + this.bidId + '/generate');
+        },
+
+        sendRefine() {
+            if (!this.message.trim() || this.streaming) return;
+
             var chatDiv = document.getElementById('chat-messages');
             if (chatDiv) {
                 var msgEl = document.createElement('div');
@@ -102,38 +35,41 @@ function bidRefine(bidId, hourlyRate) {
 
             var msg = encodeURIComponent(this.message);
             this.message = '';
+            this._stream('/api/bids/' + this.bidId + '/refine?message=' + msg);
+        },
+
+        _stream(endpoint) {
+            this.streaming = true;
+            this.editing = false;
+            this.coverLetter = '';
+            this.hours = 0;
+            this.reasoning = '';
+            this.qaAnswers = [];
+            this.error = '';
+            this._raw = '';
+            this._metaParsed = false;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+
             var self = this;
-            var es = new EventSource('/api/bids/' + bidId + '/refine?message=' + msg);
+            var es = new EventSource(endpoint);
+
             es.addEventListener('delta', function(e) {
-                self.raw += JSON.parse('"' + e.data + '"');
+                self._raw += JSON.parse('"' + e.data + '"');
                 self._parse();
             });
+
             es.addEventListener('done', function(e) {
                 es.close();
                 self._parse();
                 self.streaming = false;
-
-                // Update the cover letter on the page in-place
-                var coverEl = document.querySelector('#bid-output .prose');
-                if (coverEl && self.coverLetter) {
-                    coverEl.textContent = self.coverLetter;
-                }
-
-                // Update pricing sidebar if meta was parsed
-                if (self.metaParsed && self.hours) {
-                    var pricingData = document.querySelector('#bid-output')
-                        ? document.querySelector('[x-data*="hours"]')
-                        : null;
-                    if (pricingData && pricingData._x_dataStack) {
-                        pricingData._x_dataStack[0].hours = self.hours;
-                    }
-                }
             });
+
             es.addEventListener('error', function(e) {
                 self.error = e.data || 'Connection lost';
                 self.streaming = false;
                 es.close();
             });
+
             es.onerror = function() {
                 if (self.streaming) {
                     self.error = 'Connection lost';
@@ -142,15 +78,16 @@ function bidRefine(bidId, hourlyRate) {
                 }
             };
         },
+
         _parse() {
-            var idx = this.raw.indexOf('---META---');
+            var idx = this._raw.indexOf('---META---');
             if (idx === -1) {
-                this.coverLetter = this.raw;
+                this.coverLetter = this._raw;
                 return;
             }
-            this.coverLetter = this.raw.substring(0, idx).trim();
-            if (!this.metaParsed) {
-                var metaStr = this.raw.substring(idx + 10).trim();
+            this.coverLetter = this._raw.substring(0, idx).trim();
+            if (!this._metaParsed) {
+                var metaStr = this._raw.substring(idx + 10).trim();
                 try {
                     var jsonStr = metaStr;
                     if (jsonStr.indexOf('```') !== -1) {
@@ -164,10 +101,8 @@ function bidRefine(bidId, hourlyRate) {
                     this.hours = meta.estimated_hours || 0;
                     this.reasoning = meta.reasoning || '';
                     this.qaAnswers = meta.qa_answers || [];
-                    this.metaParsed = true;
-                } catch(e) {
-                    // META JSON not complete yet
-                }
+                    this._metaParsed = true;
+                } catch(e) {}
             }
         }
     };

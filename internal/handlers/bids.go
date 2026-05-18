@@ -71,9 +71,10 @@ func (h *BidsHandler) DetailPage(w http.ResponseWriter, r *http.Request) {
 	h.db.Where("bid_id = ?", bid.ID).Order("created_at asc").Find(&messages)
 
 	h.renderer.Page(w, "app", "bid_detail", map[string]any{
-		"User":     user,
-		"Bid":      bid,
-		"Messages": messages,
+		"User":       user,
+		"Bid":        bid,
+		"Messages":   messages,
+		"Generating": bid.CoverLetter == "",
 	})
 }
 
@@ -115,12 +116,8 @@ func (h *BidsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return the streaming component
-	h.renderer.Partial(w, "bid_stream", map[string]any{
-		"BidID":      bid.ID.String(),
-		"Endpoint":   fmt.Sprintf("/api/bids/%s/generate", bid.ID),
-		"HourlyRate": bid.HourlyRate,
-	})
+	w.Header().Set("HX-Redirect", fmt.Sprintf("/bids/%s", bid.ID))
+	w.WriteHeader(http.StatusOK)
 }
 
 // StreamGenerate is the SSE endpoint for bid generation
@@ -159,7 +156,7 @@ func (h *BidsHandler) StreamGenerate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "event: done\ndata: {\"redirect\":\"/bids/%s\"}\n\n", bid.ID)
+	fmt.Fprintf(w, "event: done\ndata: ok\n\n")
 	flusher.Flush()
 }
 
@@ -205,7 +202,7 @@ func (h *BidsHandler) StreamRefine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, "event: done\ndata: {\"redirect\":\"/bids/%s\"}\n\n", bid.ID)
+	fmt.Fprintf(w, "event: done\ndata: ok\n\n")
 	flusher.Flush()
 }
 
