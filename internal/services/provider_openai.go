@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -94,8 +93,6 @@ func (p *OpenAIProvider) CallStream(ctx context.Context, systemPrompt string, me
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	log.Printf("[OPENAI] POST %s (model: %s, max_tokens: %d, body: %d bytes)", p.baseURL, p.model, maxTokens, len(jsonBody))
-
 	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
@@ -108,15 +105,12 @@ func (p *OpenAIProvider) CallStream(ctx context.Context, systemPrompt string, me
 	}
 	defer resp.Body.Close()
 
-	log.Printf("[OPENAI] response status: %d", resp.StatusCode)
-
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("openai error (status %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	var fullText strings.Builder
-	chunks := 0
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 64*1024), 256*1024)
@@ -146,7 +140,6 @@ func (p *OpenAIProvider) CallStream(ctx context.Context, systemPrompt string, me
 		}
 
 		if len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
-			chunks++
 			text := chunk.Choices[0].Delta.Content
 			fullText.WriteString(text)
 			onText(text)
@@ -154,11 +147,9 @@ func (p *OpenAIProvider) CallStream(ctx context.Context, systemPrompt string, me
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("[OPENAI] scanner error after %d chunks: %v", chunks, err)
 		return fullText.String(), fmt.Errorf("stream read error: %w", err)
 	}
 
-	log.Printf("[OPENAI] stream done: %d chunks, %d chars", chunks, fullText.Len())
 	return fullText.String(), nil
 }
 

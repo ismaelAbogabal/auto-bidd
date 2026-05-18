@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -84,8 +83,6 @@ func (p *AnthropicProvider) CallStream(ctx context.Context, systemPrompt string,
 		return "", fmt.Errorf("marshal request: %w", err)
 	}
 
-	log.Printf("[ANTHROPIC] POST %s (model: %s, max_tokens: %d, body: %d bytes)", p.baseURL, p.model, maxTokens, len(jsonBody))
-
 	req, err := http.NewRequestWithContext(ctx, "POST", p.baseURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return "", fmt.Errorf("create request: %w", err)
@@ -98,8 +95,6 @@ func (p *AnthropicProvider) CallStream(ctx context.Context, systemPrompt string,
 	}
 	defer resp.Body.Close()
 
-	log.Printf("[ANTHROPIC] response status: %d", resp.StatusCode)
-
 	if resp.StatusCode != http.StatusOK {
 		respBody, _ := io.ReadAll(resp.Body)
 		return "", fmt.Errorf("anthropic error (status %d): %s", resp.StatusCode, string(respBody))
@@ -107,7 +102,6 @@ func (p *AnthropicProvider) CallStream(ctx context.Context, systemPrompt string,
 
 	var fullText strings.Builder
 	var eventType string
-	chunks := 0
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 64*1024), 256*1024)
@@ -117,9 +111,6 @@ func (p *AnthropicProvider) CallStream(ctx context.Context, systemPrompt string,
 
 		if strings.HasPrefix(line, "event: ") {
 			eventType = strings.TrimPrefix(line, "event: ")
-			if eventType == "error" {
-				log.Printf("[ANTHROPIC] received error event in stream")
-			}
 			continue
 		}
 
@@ -132,7 +123,6 @@ func (p *AnthropicProvider) CallStream(ctx context.Context, systemPrompt string,
 				} `json:"delta"`
 			}
 			if err := json.Unmarshal([]byte(data), &delta); err == nil && delta.Delta.Type == "text_delta" {
-				chunks++
 				fullText.WriteString(delta.Delta.Text)
 				onText(delta.Delta.Text)
 			}
@@ -140,11 +130,9 @@ func (p *AnthropicProvider) CallStream(ctx context.Context, systemPrompt string,
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Printf("[ANTHROPIC] scanner error after %d chunks: %v", chunks, err)
 		return fullText.String(), fmt.Errorf("stream read error: %w", err)
 	}
 
-	log.Printf("[ANTHROPIC] stream done: %d chunks, %d chars", chunks, fullText.Len())
 	return fullText.String(), nil
 }
 

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -112,12 +111,9 @@ func (h *BidsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	bid, err := h.bids.CreateBidRecord(user.ID, input)
 	if err != nil {
-		log.Printf("[BID] create failed: %v", err)
 		h.renderer.Partial(w, "alert", map[string]any{"Type": "error", "Message": "Failed to create bid"})
 		return
 	}
-
-	log.Printf("[BID] created bid %s for user %s (job: %q)", bid.ID, user.ID, jobTitle)
 
 	// Return the streaming component
 	h.renderer.Partial(w, "bid_stream", map[string]any{
@@ -132,46 +128,37 @@ func (h *BidsHandler) StreamGenerate(w http.ResponseWriter, r *http.Request) {
 	user := middleware.GetUser(r)
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		log.Printf("[SSE] invalid bid ID: %v", err)
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
 	var bid models.Bid
 	if err := h.db.Where("id = ? AND user_id = ?", id, user.ID).First(&bid).Error; err != nil {
-		log.Printf("[SSE] bid %s not found for user %s: %v", id, user.ID, err)
 		http.Error(w, "Bid not found", http.StatusNotFound)
 		return
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		log.Printf("[SSE] response writer does not support flushing")
 		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
 		return
 	}
-
-	log.Printf("[SSE] starting stream for bid %s", bid.ID)
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	chunks := 0
 	err = h.bids.StreamGenerate(r.Context(), &bid, func(text string) {
-		chunks++
 		fmt.Fprintf(w, "event: delta\ndata: %s\n\n", escapeSSE(text))
 		flusher.Flush()
 	})
 
 	if err != nil {
-		log.Printf("[SSE] stream error for bid %s after %d chunks: %v", bid.ID, chunks, err)
 		fmt.Fprintf(w, "event: error\ndata: %s\n\n", escapeSSE(err.Error()))
 		flusher.Flush()
 		return
 	}
 
-	log.Printf("[SSE] stream complete for bid %s (%d chunks)", bid.ID, chunks)
 	fmt.Fprintf(w, "event: done\ndata: {\"redirect\":\"/bids/%s\"}\n\n", bid.ID)
 	flusher.Flush()
 }
